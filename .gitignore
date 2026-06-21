@@ -1,0 +1,8 @@
+config.json
+.claude/
+__pycache__/
+*.pyc
+server.log
+# runtime per-instance hide-state + its backups (see multi-instance note)
+archive.json
+archive.json.bak-*

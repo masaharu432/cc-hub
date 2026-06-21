@@ -1,0 +1,145 @@
+/* Small custom tweaks on top of Bootstrap (dark theme). */
+
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+
+/* "running" indicator dot — every listed session is alive, so it stays lit.
+   .off is kept for any future "stopped" state but is currently unused. */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-block;
+}
+.dot.on  { background: var(--bs-success); box-shadow: 0 0 6px var(--bs-success); }
+.dot.off { background: var(--bs-secondary); }
+
+/* Merged "running + stop" control: a green-glowing × button. The glow signals
+   the session is live (every listed one is); pressing it stops the session,
+   so it turns danger-red on hover/press to telegraph the destructive action. */
+.sess-kill {
+  color: var(--bs-success);
+  border: 1px solid var(--bs-success);
+  box-shadow: 0 0 6px rgba(var(--bs-success-rgb), .5);
+}
+.sess-kill:hover, .sess-kill:active, .sess-kill:focus-visible {
+  color: #fff;
+  background: var(--bs-danger);
+  border-color: var(--bs-danger);
+  box-shadow: none;
+}
+
+/* Live-session restart: green outline + glow (it's running), but pressing it
+   stops-and-relaunches rather than destroys, so hover goes primary-blue (an
+   action) instead of danger-red. Used to rebuild a dead RC bridge. */
+.sess-restart {
+  color: var(--bs-success);
+  border: 1px solid var(--bs-success);
+  box-shadow: 0 0 6px rgba(var(--bs-success-rgb), .5);
+}
+.sess-restart:hover, .sess-restart:active, .sess-restart:focus-visible {
+  color: #fff;
+  background: var(--bs-primary);
+  border-color: var(--bs-primary);
+  box-shadow: none;
+}
+/* Restart feedback states (set by restartSession):
+   .busy  = in progress — amber + spinning icon, not clickable
+   .done  = finished     — solid green flash + check icon
+   .err   = failed       — solid red flash */
+.sess-restart.busy {
+  color: var(--bs-warning);
+  background: transparent;
+  border-color: var(--bs-warning);
+  box-shadow: 0 0 6px rgba(var(--bs-warning-rgb), .6);
+  pointer-events: none;
+}
+.sess-restart.busy .bi { animation: sess-spin .8s linear infinite; }
+.sess-restart.done {
+  color: #fff;
+  background: var(--bs-success);
+  border-color: var(--bs-success);
+  box-shadow: 0 0 12px rgba(var(--bs-success-rgb), .9);
+}
+.sess-restart.err {
+  color: #fff;
+  background: var(--bs-danger);
+  border-color: var(--bs-danger);
+  box-shadow: none;
+}
+@keyframes sess-spin { to { transform: rotate(360deg); } }
+
+/* 起動 (launch) button lifecycle (set by setLaunchBtn): mirror the restart-row
+   states so creating a new session shows in-progress → done feedback.
+   busy = amber + spinning icon (disabled); done = bright green flash;
+   err = solid red flash. The button stays btn-success otherwise. */
+#launch.busy {
+  color: var(--bs-warning);
+  background: transparent;
+  border-color: var(--bs-warning);
+  box-shadow: 0 0 8px rgba(var(--bs-warning-rgb), .6);
+  pointer-events: none;
+}
+#launch.busy .bi { animation: sess-spin .8s linear infinite; }
+#launch.done {
+  background: var(--bs-success);
+  border-color: var(--bs-success);
+  box-shadow: 0 0 14px rgba(var(--bs-success-rgb), .9);
+}
+#launch.err {
+  background: var(--bs-danger);
+  border-color: var(--bs-danger);
+  box-shadow: none;
+}
+
+/* Stopped counterpart: red outline = not running. Pressing resumes it, so it
+   flips to green (the state it's about to enter) on hover/press. No glow —
+   only live sessions glow. */
+.sess-resume {
+  color: var(--bs-danger);
+  border: 1px solid var(--bs-danger);
+}
+.sess-resume:hover, .sess-resume:active, .sess-resume:focus-visible {
+  color: #fff;
+  background: var(--bs-success);
+  border-color: var(--bs-success);
+}
+
+/* clickable folder rows in the browser */
+#browseList .list-group-item-action { cursor: pointer; }
+.folder-name { word-break: break-all; }
+
+/* keep session rows tidy on narrow screens */
+.sess-meta { min-width: 0; }
+.sess-name { font-weight: 600; word-break: break-all; }
+
+/* Swipe-to-reveal action rows: the visible content (.swipe-front) slides
+   sideways to uncover an action button pinned to one edge. Swiping the front
+   RIGHT reveals the left-edge action (.swipe-action-left, e.g. 改名); swiping
+   LEFT reveals the right-edge action (.swipe-action-right, e.g. アーカイブ).
+   Rows opt in via .swipe-item + p-0; padding moves onto the front layer so the
+   front fully covers (and hides) both actions when closed. */
+.swipe-item { position: relative; overflow: hidden; }
+.swipe-action {
+  position: absolute; top: 0; bottom: 0;
+  display: flex; align-items: stretch;
+}
+.swipe-action-left  { left: 0; }
+.swipe-action-right { right: 0; }
+.swipe-action .btn {
+  height: 100%;
+  min-width: 88px;
+  border: 0; border-radius: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .15rem;
+  font-size: .75rem; line-height: 1.1;
+}
+.swipe-front {
+  position: relative; z-index: 1;
+  background: var(--bs-card-bg);
+  touch-action: pan-y; /* the row owns horizontal panning; vertical stays native */
+}
+.swipe-front.swipe-anim { transition: transform .18s ease-out; }
