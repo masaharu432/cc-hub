@@ -48,7 +48,7 @@ async function api(path, opts = {}) {
     localStorage.removeItem("ccwa_token");
     TOKEN = "";
     $("auth").classList.remove("d-none"); // auth is on; let the user supply a token
-    throw new Error("認証が必要です: トークンを入力してください");
+    throw new Error(t("err.auth_required"));
   }
   if (!r.ok) {
     const err = new Error(data.error || "HTTP " + r.status);
@@ -130,32 +130,32 @@ function setLaunchBtn(state) {
   if (state === "busy") {
     btn.classList.add("busy");
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> 起動中…';
+    btn.innerHTML = `<i class="bi bi-arrow-clockwise"></i> ${t("launch.busy")}`;
   } else if (state === "done") {
     btn.classList.add("done");
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-check-lg"></i> 起動しました';
+    btn.innerHTML = `<i class="bi bi-check-lg"></i> ${t("launch.done")}`;
     launchBtnTimer = setTimeout(() => setLaunchBtn("idle"), 1600);
   } else if (state === "err") {
     btn.classList.add("err");
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-exclamation-lg"></i> 起動失敗';
+    btn.innerHTML = `<i class="bi bi-exclamation-lg"></i> ${t("launch.failed")}`;
     launchBtnTimer = setTimeout(() => setLaunchBtn("idle"), 1600);
   } else { // idle
     btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-play-fill"></i> 起動';
+    btn.innerHTML = `<i class="bi bi-play-fill"></i> ${t("launch.btn")}`;
   }
 }
 
 async function launch() {
   const name = fullSessionName();
   const dir = $("dir").value.trim();
-  if (!dir) return show("起動するフォルダを選んでください", "danger");
-  if (!name) return show("セッション名を入力してください", "danger");
+  if (!dir) return show(t("launch.need_dir"), "danger");
+  if (!name) return show(t("launch.need_name"), "danger");
   setLaunchBtn("busy");
   try {
     const r = await api("/api/launch", { method: "POST", body: JSON.stringify({ name, dir }) });
-    show(r.created ? `起動しました: ${r.name}` : `既に起動中: ${r.name}`);
+    show(r.created ? t("launch.launched", { name: r.name }) : t("launch.already", { name: r.name }));
     setLaunchBtn("done");
     refresh();
   } catch (e) {
@@ -194,6 +194,16 @@ function sessDisplayName(name, projPath) {
 let expanded = null;
 let lastProjects = [];
 
+// >0 while a restart/resume is booting a session. The background poll skips
+// re-rendering during that window so the in-progress spinner button isn't
+// wiped mid-boot (the re-render would replace it with a fresh idle row).
+let resumeInFlight = 0;
+// >0 while an archive request is in flight. Like resumeInFlight, it pauses the
+// background poll so the spinner on the swipe button isn't wiped before the
+// row is removed on success.
+let archiveInFlight = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // One live session row. Same swipe UI as the stopped rows: swiping RIGHT
 // uncovers 改名 (live /rename); swiping LEFT uncovers 停止 (kill the session,
 // then archive its conversation). `open` controls collapse; `parent` ties it to
@@ -205,24 +215,24 @@ function renderLive(s, parent, open) {
     <li class="list-group-item swipe-item p-0 ${open ? "" : "d-none"}" data-parent="${esc(parent)}">
       <div class="swipe-action swipe-action-left">
         <button class="btn btn-primary" data-act="rename" data-name="${esc(s.name)}">
-          <i class="bi bi-pencil"></i>改名</button>
+          <i class="bi bi-pencil"></i>${t("action.rename")}</button>
       </div>
       <div class="swipe-action swipe-action-right">
         <button class="btn btn-danger" data-act="killarchive"
-                data-name="${esc(s.name)}" data-id="${esc(s.id || "")}" title="停止してアーカイブ">
-          <i class="bi bi-archive"></i>停止</button>
+                data-name="${esc(s.name)}" data-id="${esc(s.id || "")}" title="${t("action.kill_archive_title")}">
+          <i class="bi bi-archive"></i>${t("action.stop")}</button>
       </div>
       <div class="swipe-front d-flex align-items-center gap-2 ps-3 pe-2 py-2" data-swipe-id="${esc(s.id || s.name)}">
         <span class="dot on flex-none"></span>
         <span class="sess-meta flex-grow-1">
           <span class="sess-name d-block">${esc(sessDisplayName(s.name, parent))}</span>
           <span class="d-block text-secondary small text-truncate">
-            ${meta}${s.attached ? ' · <i class="bi bi-display"></i> 端末接続中' : ""}
+            ${meta}${s.attached ? ' · <i class="bi bi-display"></i> ' + t("sess.attached") : ""}
           </span>
         </span>
         <button class="btn btn-sm sess-restart flex-none" data-act="restart"
                 data-name="${esc(s.name)}" data-id="${esc(s.id || "")}" data-dir="${esc(parent)}"
-                title="再起動 — 停止して同じ会話で起動し直す(RC再接続用)"><i class="bi bi-arrow-clockwise"></i></button>
+                title="${t("action.restart_title")}"><i class="bi bi-arrow-clockwise"></i></button>
       </div>
     </li>`;
 }
@@ -235,29 +245,29 @@ function renderResume(r, dir, open) {
   // The persisted custom-title is the full `<folder>_<suffix>` launcher name,
   // so strip the folder prefix here too; the last-message fallback is left as-is.
   const title = r.title ? sessDisplayName(r.title, dir) : "";
-  const label = title || r.last || "(無題)";
+  const label = title || r.last || t("sess.untitled");
   const sub = r.title && r.last ? r.last : ""; // show last message under the title
   return `
     <li class="list-group-item swipe-item p-0 ${open ? "" : "d-none"}" data-parent="${esc(dir)}">
       <div class="swipe-action swipe-action-left">
         <button class="btn btn-primary" data-act="rename"
                 data-id="${esc(r.id)}" data-dir="${esc(dir)}" data-title="${esc(r.title || "")}">
-          <i class="bi bi-pencil"></i>改名</button>
+          <i class="bi bi-pencil"></i>${t("action.rename")}</button>
       </div>
       <div class="swipe-action swipe-action-right">
         <button class="btn btn-secondary" data-act="archive" data-id="${esc(r.id)}">
-          <i class="bi bi-archive"></i>アーカイブ</button>
+          <i class="bi bi-archive"></i>${t("action.archive")}</button>
       </div>
       <div class="swipe-front d-flex align-items-center gap-2 ps-4 pe-2 py-2" data-swipe-id="${esc(r.id)}">
         <span class="sess-meta flex-grow-1">
           <span class="d-block sess-name fw-normal">${esc(label)}</span>
           <span class="d-block text-secondary small">
-            ${sub ? esc(sub) + " · " : ""}<i class="bi bi-clock-history"></i> ${fmtAge(r.modified)}前
+            ${sub ? esc(sub) + " · " : ""}<i class="bi bi-clock-history"></i> ${t("time.ago", { age: fmtAge(r.modified) })}
           </span>
         </span>
         <button class="btn btn-sm sess-resume flex-none"
                 data-act="resume" data-id="${esc(r.id)}" data-dir="${esc(dir)}"
-                data-name="${esc(sanitizeName(r.title || ""))}" title="停止中 — タップで再開"><i class="bi bi-arrow-counterclockwise"></i></button>
+                data-name="${esc(sanitizeName(r.title || ""))}" title="${t("action.resume_title")}"><i class="bi bi-arrow-counterclockwise"></i></button>
       </div>
     </li>`;
 }
@@ -268,20 +278,20 @@ function renderResume(r, dir, open) {
 // RC bridge all survive. Flagless rows (no sid in argv) have id/title null.
 function renderExternal(c, dir, open) {
   const title = c.title ? sessDisplayName(c.title, dir) : "";
-  const label = title || c.last || (c.id ? "(無題)" : "(ターミナル起動・名前不明)");
+  const label = title || c.last || (c.id ? t("sess.untitled") : t("sess.external_unknown"));
   return `
     <li class="list-group-item d-flex align-items-center gap-2 ps-4 pe-2 ${open ? "" : "d-none"}" data-parent="${esc(dir)}">
       <span class="sess-meta flex-grow-1">
         <span class="d-block sess-name fw-normal">${esc(label)}</span>
         <span class="d-block text-secondary small">
-          <span class="badge text-bg-warning">稼働中(ターミナル)</span> · pid ${esc(String(c.pid))}
+          <span class="badge text-bg-warning">${t("badge.external")}</span> · pid ${esc(String(c.pid))}
         </span>
       </span>
       <button class="btn btn-sm btn-outline-warning flex-none"
               data-act="migrate" data-pid="${esc(String(c.pid))}" data-id="${esc(c.id || "")}"
               data-dir="${esc(dir)}" data-name="${esc(sanitizeName(c.title || ""))}"
-              title="${c.id ? "一度終了し、会話を保持して tmux で再開する" : "reptyr でプロセスを生かしたまま tmux へ(sid 不明なので再開不可)"}">
-        <i class="bi bi-box-arrow-in-down"></i> ${c.id ? "tmuxへ(終了して再開)" : "tmuxへ移管"}</button>
+              title="${c.id ? t("migrate.title_known") : t("migrate.title_flagless")}">
+        <i class="bi bi-box-arrow-in-down"></i> ${c.id ? t("migrate.btn_known") : t("migrate.btn_flagless")}</button>
     </li>`;
 }
 
@@ -300,7 +310,7 @@ function renderProject(p) {
         ${p.sessions.length ? `<span class="badge text-bg-success rounded-pill">● ${p.sessions.length}</span>` : ""}
         ${(p.external || []).length ? `<span class="badge text-bg-warning rounded-pill">⌨ ${p.external.length}</span>` : ""}
         ${p.resumable.length ? `<span class="badge text-bg-secondary rounded-pill">↺ ${p.resumable.length}</span>` : ""}
-        <button class="btn btn-sm btn-outline-success flex-none" data-act="usefolder" data-dir="${esc(p.path)}" title="このフォルダで新規起動"><i class="bi bi-plus-lg"></i></button>
+        <button class="btn btn-sm btn-outline-success flex-none" data-act="usefolder" data-dir="${esc(p.path)}" title="${t("proj.usefolder_title")}"><i class="bi bi-plus-lg"></i></button>
       </div>
       <span class="d-block text-secondary small font-monospace text-break ${open ? "" : "d-none"}" data-parent="${esc(p.path)}">${esc(p.path)}</span>
     </li>
@@ -326,16 +336,29 @@ async function adoptAllTerminals() {
     const r = await api("/api/migrate-all", { method: "POST", body: "{}" });
     const ok = r.migrated.length, rs = (r.resumed || []).length, ng = r.failed.length;
     // migrated = reptyr で生きたまま / resumed = 中継不可で kill+resume(生成中表示のみ消失)
-    const parts = [`移管 ${ok} 件`];
-    if (rs) parts.push(`再開 ${rs} 件`);
-    if (ng) parts.push(`失敗 ${ng} 件`);
-    show("tmuxへ取り込み: " + parts.join(" / "), ng ? "warning" : "success");
-    if (ng) show("失敗: " + r.failed.map((f) => `pid ${f.pid} (${f.error})`).join(" / "), "danger");
+    const parts = [t("adopt.migrated", { n: ok })];
+    if (rs) parts.push(t("adopt.resumed", { n: rs }));
+    if (ng) parts.push(t("adopt.failed", { n: ng }));
+    show(t("adopt.result", { parts: parts.join(" / ") }), ng ? "warning" : "success");
+    if (ng) show(t("adopt.fail_prefix", { items: r.failed.map((f) => `pid ${f.pid} (${f.error})`).join(" / ") }), "danger");
     refresh();
   } catch (e) {
     show(e.message, "danger");
   } finally {
     btn.disabled = false;
+  }
+}
+
+// Drop a conversation (by id) from the cached overview so an optimistic row
+// removal can't be resurrected by a render from stale cache — a background
+// poll, a folder collapse/expand (toggleProject), etc. — before the
+// authoritative refresh lands. Without this, archiving a row makes it vanish
+// then reappear, so it looks like the action needs a second press to "take".
+function dropFromCache(id) {
+  if (!id) return;
+  for (const p of lastProjects) {
+    if (p.resumable) p.resumable = p.resumable.filter((c) => c.id !== id);
+    if (p.sessions) p.sessions = p.sessions.filter((s) => s.id !== id);
   }
 }
 
@@ -351,7 +374,7 @@ function renderOverview() {
   openFront = null; // a rebuild makes fresh, closed rows
   if (!lastProjects.length) {
     el.innerHTML =
-      '<li class="list-group-item text-secondary small">起動中のセッションも再開できる会話もありません</li>';
+      `<li class="list-group-item text-secondary small">${t("overview.empty")}</li>`;
     return;
   }
   el.innerHTML = lastProjects.map(renderProject).join("");
@@ -372,7 +395,7 @@ function useFolder(path) {
   const tabs = document.getElementById("viewTabs");
   card.style.scrollMarginTop = (tabs ? tabs.offsetHeight + 6 : 0) + "px";
   card.scrollIntoView({ behavior: "smooth", block: "start" });
-  show("起動先に設定しました: " + path);
+  show(t("proj.set_target", { path }));
 }
 
 // Toggle a project's collapse state and re-render from cache (no refetch).
@@ -405,8 +428,8 @@ async function renameSession(old, dir) {
   const fixed = prefix && old.startsWith(prefix + "_") ? prefix + "_" : "";
   const oldSuffix = fixed ? old.slice(fixed.length) : old;
   const next = prompt(
-    (fixed ? `新しいセッション名（「${fixed}」は固定）` : "新しいセッション名") +
-      "\n(稼働中のまま /rename を送信します)",
+    (fixed ? t("rename.prompt_fixed", { fixed }) : t("rename.prompt")) +
+      t("rename.live_note"),
     oldSuffix
   );
   if (next == null) return;
@@ -415,7 +438,7 @@ async function renameSession(old, dir) {
   const full = fixed + suffix;
   try {
     const r = await api("/api/rename", { method: "POST", body: JSON.stringify({ old, new: full }) });
-    show(`改名しました: ${r.name}`);
+    show(t("rename.done", { name: r.name }));
     refresh();
   } catch (e) {
     show(e.message, "danger");
@@ -432,7 +455,7 @@ async function renameResumable(id, dir, currentTitle) {
   const fixed = prefix && title.startsWith(prefix + "_") ? prefix + "_" : "";
   const oldSuffix = fixed ? title.slice(fixed.length) : title;
   const next = prompt(
-    fixed ? `新しい名前（「${fixed}」は固定）` : "新しい名前",
+    fixed ? t("rename.prompt_fixed2", { fixed }) : t("rename.prompt2"),
     oldSuffix
   );
   if (next == null) return;
@@ -445,7 +468,7 @@ async function renameResumable(id, dir, currentTitle) {
       method: "POST",
       body: JSON.stringify({ id, new: full }),
     });
-    show(`改名しました: ${r.name}`);
+    show(t("rename.done", { name: r.name }));
     if (currentView === "archive") loadArchive();
     else refresh();
   } catch (e) {
@@ -479,6 +502,23 @@ function setRestartBtn(btn, state) {
   }
 }
 
+// Archive swipe button: "busy" swaps its icon for a spinner and disables it
+// while the request is in flight; "idle" restores the archive icon (used on
+// failure — on success the row is removed, so no restore needed).
+function setArchiveBtn(btn, state) {
+  if (!btn) return;
+  const icon = btn.querySelector(".bi");
+  if (state === "busy") {
+    btn.classList.add("is-busy");
+    btn.disabled = true;
+    if (icon) icon.className = "bi bi-arrow-clockwise";
+  } else {
+    btn.classList.remove("is-busy");
+    btn.disabled = false;
+    if (icon) icon.className = "bi bi-archive";
+  }
+}
+
 async function restartSession(name, id, dir, btn) {
   setRestartBtn(btn, "busy");
   try {
@@ -501,6 +541,7 @@ async function restartSession(name, id, dir, btn) {
 // can only stop it (nothing to archive).
 async function killArchiveSession(name, id, row) {
   openFront = null;
+  dropFromCache(id); // keep the cache in sync so a poll/toggle can't resurrect it
   if (row) row.remove(); // optimistic: vanish immediately, don't wait on the API
   try {
     await api("/api/kill", { method: "POST", body: JSON.stringify({ name }) });
@@ -524,23 +565,35 @@ async function killArchiveSession(name, id, row) {
 // 409 = the server's flagless guard: a sid-less terminal claude runs in the
 // same folder and might BE this conversation — confirm, then retry forced.
 async function resumeConversation(dir, id, name, force = false, btn = null) {
+  // Show the busy spinner immediately so the tap reads as "working" instead of
+  // a dead red/idle button. restartSession already set busy; setting it again
+  // is a no-op, so this also covers the direct stopped-row resume tap.
+  if (btn) {
+    resumeInFlight++;
+    setRestartBtn(btn, "busy");
+  }
   try {
     const r = await api("/api/resume", {
       method: "POST",
       body: JSON.stringify({ dir, id, name, force }),
     });
-    show(r.created ? `再開しました: ${r.name}` : `既に起動中: ${r.name}`);
-    // Restart flow: flash the green "done" state and hold it briefly so the
-    // user sees the restart finished, then refresh (which re-renders the row).
+    show(r.created ? t("resume.done", { name: r.name }) : t("resume.already", { name: r.name }));
     if (btn) {
+      // /api/resume returns the moment the tmux session is created, but Claude
+      // still needs a couple seconds to boot and get its @ccwa_sid stamped.
+      // Keep the spinner turning until the session shows up live AND stamped,
+      // so the feedback spans the real wait instead of flashing past in ~100ms.
+      await waitUntilLive(r.name, r.id || id);
       setRestartBtn(btn, "done");
-      setTimeout(() => refresh(), 800);
+      resumeInFlight = Math.max(0, resumeInFlight - 1);
+      setTimeout(() => refresh(), 400); // re-render the now-live (green) row
     } else {
       refresh();
     }
   } catch (e) {
+    if (btn) resumeInFlight = Math.max(0, resumeInFlight - 1);
     if (e.status === 409 && !force) {
-      if (confirm(e.message + "\n\nそれでも再開しますか？"))
+      if (confirm(e.message + t("resume.confirm_suffix")))
         resumeConversation(dir, id, name, true, btn);
       else setRestartBtn(btn, "err");
       return;
@@ -550,17 +603,48 @@ async function resumeConversation(dir, id, name, force = false, btn = null) {
   }
 }
 
+// Poll the overview until `name` appears as a live, fully-booted session — i.e.
+// tmux lists it AND its @ccwa_sid has been stamped (so s.id matches). That stamp
+// lands ~2s after launch, so this naturally spans the real boot wait. Data only:
+// it does NOT re-render, so an in-progress spinner button survives. Gives up
+// after ~10s and lets the caller refresh anyway.
+async function waitUntilLive(name, id, tries = 24, delay = 400) {
+  for (let i = 0; i < tries; i++) {
+    await sleep(delay);
+    try {
+      const { projects } = await api("/api/overview");
+      lastProjects = projects;
+      const live = projects.some((p) =>
+        p.sessions.some((s) => s.name === name && (!id || s.id === id)));
+      if (live) return true;
+    } catch {
+      /* transient fetch failure — keep polling */
+    }
+  }
+  return false;
+}
+
 // Archive = hide from the list. The jsonl is untouched and the archive tab
 // can always restore, so no confirm and no undo affordance — just a note.
-async function archiveConversation(id, row) {
+// Show a spinner on the swipe button and remove the row only once the server
+// confirms (rather than vanishing optimistically), so a slow archive reads as
+// "working" and a failure leaves the row in place to retry. archiveInFlight
+// pauses the background poll so it can't wipe the spinner mid-request.
+async function archiveConversation(id, row, btn) {
   openFront = null; // acting on the open row; let the follow-up re-render through
-  if (row) row.remove(); // optimistic: vanish immediately, don't wait on the API
+  archiveInFlight++;
+  setArchiveBtn(btn, "busy");
   try {
     await api("/api/archive", { method: "POST", body: JSON.stringify({ id }) });
+    dropFromCache(id); // keep the cache in sync so a poll/toggle can't resurrect it
+    if (row) row.remove(); // gone for real now
+    archiveInFlight = Math.max(0, archiveInFlight - 1);
     refresh({ silent: true }); // resync badge counts etc.
   } catch (e) {
+    archiveInFlight = Math.max(0, archiveInFlight - 1);
+    setArchiveBtn(btn, "idle"); // restore so the row can be retried
     show(e.message, "danger");
-    refresh({ silent: true }); // failed → bring the row back
+    refresh({ silent: true });
   }
 }
 
@@ -568,7 +652,7 @@ async function unarchiveConversation(id) {
   openFront = null; // acting on the open row; let loadArchive rebuild through
   try {
     await api("/api/unarchive", { method: "POST", body: JSON.stringify({ id }) });
-    show("一覧に戻しました");
+    show(t("unarchive.done"));
     loadArchive(); // only called from the archive tab, where this re-renders
   } catch (e) {
     show(e.message, "danger");
@@ -586,10 +670,10 @@ async function migrateConversation(pid, sid, dir, name) {
       method: "POST",
       body: JSON.stringify({ pid: Number(pid), sid, name }),
     });
-    show(`tmuxへ移管しました: ${r.name}`);
+    show(t("migrate.done", { name: r.name }));
     refresh();
   } catch (e) {
-    if (sid && confirm(`移管に失敗しました: ${e.message}\n\n旧方式にフォールバックしますか？(ターミナル側のプロセスを終了して tmux 内で再開。生成途中の内容は失われます)`)) {
+    if (sid && confirm(t("migrate.fallback_confirm", { msg: e.message }))) {
       takeoverConversation(dir, sid, name);
       return;
     }
@@ -606,7 +690,7 @@ async function takeoverConversation(dir, id, name) {
       method: "POST",
       body: JSON.stringify({ dir, id, name, takeover: true }),
     });
-    show(`tmuxへ移管しました: ${r.name}`);
+    show(t("migrate.done", { name: r.name }));
     refresh();
   } catch (e) {
     show(e.message, "danger");
@@ -710,21 +794,21 @@ function attachSwipe(listEl) {
 // creates sessions ON it. We only ignite / list / link / stop — session
 // management is the app's job.
 function spawnStatusBadge(s) {
-  if (s.status === "connected") return '<span class="badge text-bg-success">● 接続済</span>';
-  if (s.status === "connecting") return '<span class="badge text-bg-warning">接続中…</span>';
-  return '<span class="badge text-bg-secondary">状態不明</span>';
+  if (s.status === "connected") return `<span class="badge text-bg-success">${t("spawn.connected")}</span>`;
+  if (s.status === "connecting") return `<span class="badge text-bg-warning">${t("spawn.connecting")}</span>`;
+  return `<span class="badge text-bg-secondary">${t("spawn.unknown")}</span>`;
 }
 
 function renderSpawnRow(s) {
   const cap =
     s.capacity_used != null && s.capacity_max != null
-      ? ` · セッション ${s.capacity_used}/${s.capacity_max}`
+      ? t("spawn.capacity", { used: s.capacity_used, max: s.capacity_max })
       : "";
   // The environment-scoped link lands directly on this server in the app /
   // claude.ai/code — bypasses the new-session pulldown defaulting to GitHub.
   const link = s.env_url
     ? `<a class="btn btn-sm btn-outline-success flex-none" href="${esc(s.env_url)}"
-         target="_blank" rel="noopener" title="この環境をアプリ/ブラウザで開く"><i class="bi bi-box-arrow-up-right"></i> 開く</a>`
+         target="_blank" rel="noopener" title="${t("spawn.open_title")}"><i class="bi bi-box-arrow-up-right"></i> ${t("spawn.open")}</a>`
     : "";
   return `
     <li class="list-group-item d-flex align-items-center gap-2 ps-2 pe-2">
@@ -736,7 +820,7 @@ function renderSpawnRow(s) {
       </span>
       ${link}
       <button class="btn btn-sm sess-kill flex-none" data-act="spawnstop" data-name="${esc(s.name)}"
-              title="サーバー停止"><i class="bi bi-x-lg"></i></button>
+              title="${t("spawn.stop_title")}"><i class="bi bi-x-lg"></i></button>
     </li>`;
 }
 
@@ -745,7 +829,7 @@ async function refreshSpawn({ silent = false } = {}) {
     const { servers } = await api("/api/spawn-servers");
     $("spawnList").innerHTML = servers.length
       ? servers.map(renderSpawnRow).join("")
-      : '<li class="list-group-item text-secondary small">稼働中の Spawn サーバーはありません</li>';
+      : `<li class="list-group-item text-secondary small">${t("spawn.empty")}</li>`;
   } catch (e) {
     if (!silent) show(e.message, "danger");
   }
@@ -753,7 +837,7 @@ async function refreshSpawn({ silent = false } = {}) {
 
 async function launchSpawn() {
   const dir = $("spawnDir").value.trim();
-  if (!dir) return show("サーバーを立てるフォルダを選んでください", "danger");
+  if (!dir) return show(t("spawn.need_dir"), "danger");
   const btn = $("spawnLaunch");
   btn.disabled = true; // the POST waits (up to ~15s) for the environment URL
   try {
@@ -761,7 +845,7 @@ async function launchSpawn() {
       method: "POST",
       body: JSON.stringify({ dir }),
     });
-    show(`サーバーを起動しました: ${r.server.folder || r.server.name}`);
+    show(t("spawn.launched", { name: r.server.folder || r.server.name }));
     refreshSpawn({ silent: true });
   } catch (e) {
     if (e.status === 409) {
@@ -779,7 +863,7 @@ async function launchSpawn() {
 async function stopSpawn(name) {
   try {
     await api("/api/spawn-servers/" + encodeURIComponent(name), { method: "DELETE" });
-    show("停止しました: " + name);
+    show(t("spawn.stopped", { name }));
     refreshSpawn({ silent: true });
   } catch (e) {
     show(e.message, "danger");
@@ -803,7 +887,7 @@ async function browseTo(path) {
     $("browseUp").disabled = !curParent;
     const el = $("browseList");
     if (!data.entries.length) {
-      el.innerHTML = '<li class="list-group-item text-secondary small">サブフォルダはありません</li>';
+      el.innerHTML = `<li class="list-group-item text-secondary small">${t("browse.empty")}</li>`;
       return;
     }
     el.innerHTML = data.entries
@@ -831,14 +915,14 @@ function openBrowser(targetId = "dir") {
 }
 
 async function newFolder() {
-  const name = prompt("新規フォルダ名（" + curPath + " の中に作成）");
+  const name = prompt(t("browse.newfolder_prompt", { path: curPath }));
   if (!name) return;
   try {
     const r = await api("/api/mkdir", {
       method: "POST",
       body: JSON.stringify({ parent: curPath, name: name.trim() }),
     });
-    show("作成しました: " + r.path);
+    show(t("browse.created", { path: r.path }));
     browseTo(curPath); // refresh listing; new folder appears
   } catch (e) {
     show(e.message, "danger");
@@ -904,7 +988,7 @@ let lastSearchQuery = "";
 function populateSearchProjects() {
   const sel = $("searchProject");
   const prev = sel.value;
-  sel.innerHTML = ['<option value="">すべてのプロジェクト</option>']
+  sel.innerHTML = [`<option value="">${t("search.all_projects")}</option>`]
     .concat(lastProjects.map((p) => `<option value="${esc(p.path)}">${esc(p.name)}</option>`))
     .join("");
   sel.value = prev;
@@ -924,7 +1008,7 @@ async function runSearch() {
     return;
   }
   $("searchResults").innerHTML =
-    '<li class="list-group-item text-secondary small">検索中…</li>';
+    `<li class="list-group-item text-secondary small">${t("search.searching")}</li>`;
   try {
     const params = new URLSearchParams({ q });
     const project = $("searchProject").value;
@@ -948,25 +1032,25 @@ function highlight(text, query) {
 
 function renderSearchRow(r) {
   const title = r.title ? sessDisplayName(r.title, r.cwd) : "";
-  const label = title || r.snippet || "(無題)";
+  const label = title || r.snippet || t("sess.untitled");
   const sub =
     r.snippet && r.snippet !== label
       ? `<span class="d-block text-secondary small">${highlight(r.snippet, lastSearchQuery)}</span>`
       : "";
   const badge = r.archived
-    ? ' <span class="badge text-bg-secondary fw-normal">アーカイブ済</span>'
+    ? ` <span class="badge text-bg-secondary fw-normal">${t("badge.archived")}</span>`
     : "";
   // Running sessions are already live (the chat is in the RC app) — show a
   // status badge, not a 再開 button. Terminal-launched ones get a badge too
   // (take-over lives in the project list, not here). Only stopped
   // conversations can be resumed.
   const action = r.running
-    ? '<span class="badge text-bg-success rounded-pill flex-none">● 稼働中</span>'
+    ? `<span class="badge text-bg-success rounded-pill flex-none">● ${t("badge.running")}</span>`
     : r.external
-      ? '<span class="badge text-bg-warning rounded-pill flex-none">稼働中(ターミナル)</span>'
+      ? `<span class="badge text-bg-warning rounded-pill flex-none">${t("badge.external")}</span>`
       : `<button class="btn btn-sm btn-outline-success flex-none"
               data-act="resume" data-id="${esc(r.id)}" data-dir="${esc(r.cwd)}"
-              data-name="${esc(sanitizeName(r.title || ""))}">再開</button>`;
+              data-name="${esc(sanitizeName(r.title || ""))}">${t("action.resume")}</button>`;
   return `
     <li class="list-group-item d-flex align-items-center gap-2">
       <i class="bi bi-chat-left-text text-secondary flex-none"></i>
@@ -975,7 +1059,7 @@ function renderSearchRow(r) {
         ${sub}
         <span class="d-block text-secondary small">
           <i class="bi bi-folder2"></i> ${esc(r.project)} ·
-          <i class="bi bi-clock-history"></i> ${fmtAge(r.modified)}前
+          <i class="bi bi-clock-history"></i> ${t("time.ago", { age: fmtAge(r.modified) })}
         </span>
       </span>
       ${action}
@@ -986,11 +1070,11 @@ function renderSearchResults() {
   const el = $("searchResults");
   if (lastSearchResults === null) {
     el.innerHTML =
-      '<li class="list-group-item text-secondary small">検索ワードを入力してください</li>';
+      `<li class="list-group-item text-secondary small">${t("search.prompt")}</li>`;
     return;
   }
   if (!lastSearchResults.length) {
-    el.innerHTML = `<li class="list-group-item text-secondary small">「${esc(lastSearchQuery)}」に一致する会話はありません</li>`;
+    el.innerHTML = `<li class="list-group-item text-secondary small">${t("search.no_results", { q: esc(lastSearchQuery) })}</li>`;
     return;
   }
   el.innerHTML = lastSearchResults.map(renderSearchRow).join("");
@@ -1007,7 +1091,7 @@ async function loadArchive() {
     if (openFront && el.contains(openFront)) return; // re-check after the await
     openFront = null;
     if (!archived.length) {
-      el.innerHTML = '<li class="list-group-item text-secondary small">アーカイブはありません</li>';
+      el.innerHTML = `<li class="list-group-item text-secondary small">${t("archive.empty")}</li>`;
       return;
     }
     el.innerHTML = archived.map(renderArchiveRow).join("");
@@ -1019,38 +1103,62 @@ async function loadArchive() {
 // Same swipe-front structure as renderResume, so attachSwipe works here too.
 // In this tab swiping RIGHT uncovers 改名; swiping LEFT uncovers 戻す (restore).
 function renderArchiveRow(c) {
-  const label = (c.title ? sessDisplayName(c.title, c.cwd) : "") || c.last || "(無題)";
-  const proj = c.cwd ? c.cwd.replace(/[/\\]+$/, "").split(/[/\\]/).pop() : "(フォルダ不明)";
+  const label = (c.title ? sessDisplayName(c.title, c.cwd) : "") || c.last || t("sess.untitled");
+  const proj = c.cwd ? c.cwd.replace(/[/\\]+$/, "").split(/[/\\]/).pop() : t("folder.unknown");
   return `
     <li class="list-group-item swipe-item p-0">
       <div class="swipe-action swipe-action-left">
         <button class="btn btn-primary" data-act="rename"
                 data-id="${esc(c.id)}" data-dir="${esc(c.cwd)}" data-title="${esc(c.title || "")}">
-          <i class="bi bi-pencil"></i>改名</button>
+          <i class="bi bi-pencil"></i>${t("action.rename")}</button>
       </div>
       <div class="swipe-action swipe-action-right">
         <button class="btn btn-secondary" data-act="unarchive" data-id="${esc(c.id)}">
-          <i class="bi bi-arrow-counterclockwise"></i>戻す</button>
+          <i class="bi bi-arrow-counterclockwise"></i>${t("action.restore")}</button>
       </div>
       <div class="swipe-front d-flex align-items-center gap-2 ps-2 pe-2 py-2" data-swipe-id="${esc(c.id)}">
         <span class="sess-meta flex-grow-1">
           <span class="d-block sess-name fw-normal">${esc(label)}</span>
           <span class="d-block text-secondary small">
-            <i class="bi bi-folder2"></i> ${esc(proj)} · <i class="bi bi-clock-history"></i> ${fmtAge(c.modified)}前
+            <i class="bi bi-folder2"></i> ${esc(proj)} · <i class="bi bi-clock-history"></i> ${t("time.ago", { age: fmtAge(c.modified) })}
           </span>
         </span>
         <button class="btn btn-sm btn-outline-success flex-none"
                 data-act="resume" data-id="${esc(c.id)}" data-dir="${esc(c.cwd)}"
-                data-name="${esc(sanitizeName(c.title || ""))}">再開</button>
+                data-name="${esc(sanitizeName(c.title || ""))}">${t("action.resume")}</button>
       </div>
     </li>`;
 }
 
 // --- wiring ---------------------------------------------------------------- //
 function init() {
+  applyI18n(document); // localize static text before the first dynamic render
   // Auth is optional now; load regardless of whether a token is set.
   refresh();
   renderQR();
+}
+
+// --- settings (language) --------------------------------------------------- //
+// Language lives entirely client-side (see i18n.js). Switching re-applies the
+// static sweep and rebuilds the active view's dynamic DOM so the change shows
+// instantly, no reload.
+let settingsOC = null;
+
+function rerenderCurrentView() {
+  applyI18n(document);
+  setLaunchBtn("idle"); // the launch button's label is JS-rendered, not static
+  if (currentView === "projects") renderOverview();
+  else if (currentView === "spawn") refreshSpawn({ silent: true });
+  else if (currentView === "search") { populateSearchProjects(); renderSearchResults(); }
+  else if (currentView === "archive") loadArchive();
+}
+
+function openSettings() {
+  const cur = getLang();
+  const r = document.querySelector(`input[name="ccwaLang"][value="${cur}"]`);
+  if (r) r.checked = true;
+  if (!settingsOC) settingsOC = new bootstrap.Offcanvas($("settings"));
+  settingsOC.show();
 }
 
 $("saveToken").addEventListener("click", () => {
@@ -1093,9 +1201,9 @@ $("sessions").addEventListener("click", (e) => {
     else if (btn.dataset.act === "killarchive")
       killArchiveSession(btn.dataset.name, btn.dataset.id, btn.closest("li"));
     else if (btn.dataset.act === "resume")
-      resumeConversation(btn.dataset.dir, btn.dataset.id, btn.dataset.name);
+      resumeConversation(btn.dataset.dir, btn.dataset.id, btn.dataset.name, false, btn);
     else if (btn.dataset.act === "archive")
-      archiveConversation(btn.dataset.id, btn.closest("li"));
+      archiveConversation(btn.dataset.id, btn.closest("li"), btn);
     else if (btn.dataset.act === "migrate") {
       // sid-known -> terminate+resume directly; flagless -> reptyr (only option).
       if (btn.dataset.id)
@@ -1133,6 +1241,16 @@ attachSwipe($("archiveList"));
 $("viewTabs").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-view]");
   if (btn) showView(btn.dataset.view);
+});
+
+// settings: open the panel; switching the language radio re-localizes live
+$("openSettings").addEventListener("click", openSettings);
+$("langGroup").addEventListener("change", (e) => {
+  const v = e.target.value;
+  if (v === "en" || v === "ja") {
+    setLang(v);
+    rerenderCurrentView();
+  }
 });
 
 // search: submit-only (Enter / button); re-run on project filter change
@@ -1182,11 +1300,13 @@ init();
 // pile of "Failed to fetch" errors; we skip it and resync on return instead.
 setInterval(() => {
   if (document.hidden) return;
+  if (resumeInFlight || archiveInFlight) return; // an action spinner is live — don't wipe it
   if (currentView === "projects") refresh({ silent: true });
   else if (currentView === "spawn") refreshSpawn({ silent: true });
 }, 5000);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) return;
+  if (resumeInFlight || archiveInFlight) return;
   if (currentView === "projects") refresh({ silent: true });
   else if (currentView === "spawn") refreshSpawn({ silent: true });
 });

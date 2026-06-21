@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja" data-bs-theme="dark">
+<html lang="en" data-bs-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -26,11 +26,11 @@
   <!-- auth gate -->
   <div id="auth" class="card mb-3 d-none">
     <div class="card-body">
-      <label class="form-label small text-secondary">アクセストークン</label>
+      <label class="form-label small text-secondary" data-i18n="auth.label">Access token</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-key"></i></span>
-        <input id="token" type="password" class="form-control" placeholder="config.json の token を貼り付け" autocomplete="off">
-        <button class="btn btn-success" id="saveToken">保存</button>
+        <input id="token" type="password" class="form-control" data-i18n-attr="placeholder:auth.placeholder" placeholder="Paste the token from config.json" autocomplete="off">
+        <button class="btn btn-success" id="saveToken" data-i18n="auth.save">Save</button>
       </div>
     </div>
   </div>
@@ -38,32 +38,36 @@
   <!-- app -->
   <div id="app" class="d-none">
 
-    <!-- view tabs: add a tab = one nav button + one [data-view] block + a VIEWS entry -->
-    <ul class="nav nav-pills nav-justified mb-1 sticky-top bg-body py-2" id="viewTabs">
-      <li class="nav-item">
-        <button class="nav-link active" data-view="projects">
-          <i class="bi bi-terminal"></i> <span class="d-none d-sm-inline">プロジェクト</span>
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" data-view="search">
-          <i class="bi bi-search"></i> <span class="d-none d-sm-inline">検索</span>
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" data-view="archive">
-          <i class="bi bi-archive"></i> <span class="d-none d-sm-inline">アーカイブ</span>
-        </button>
-      </li>
-      <!-- Spawn is demoted: the official remote-control server proved unstable
-           in the app. tmux management (Projects) is the primary path. Kept last
-           and labelled experimental. -->
-      <li class="nav-item">
-        <button class="nav-link" data-view="spawn">
-          <i class="bi bi-broadcast-pin"></i> <span class="d-none d-sm-inline">Spawn</span><sup class="text-warning small">β</sup>
-        </button>
-      </li>
-    </ul>
+    <!-- view tabs + settings: add a tab = one nav button + one [data-view] block + a VIEWS entry -->
+    <div class="d-flex align-items-center gap-2 mb-1 sticky-top bg-body py-2">
+      <ul class="nav nav-pills nav-justified flex-grow-1 m-0" id="viewTabs">
+        <li class="nav-item">
+          <button class="nav-link active" data-view="projects">
+            <i class="bi bi-terminal"></i> <span class="d-none d-sm-inline" data-i18n="nav.projects">Projects</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-view="search">
+            <i class="bi bi-search"></i> <span class="d-none d-sm-inline" data-i18n="nav.search">Search</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-view="archive">
+            <i class="bi bi-archive"></i> <span class="d-none d-sm-inline" data-i18n="nav.archive">Archive</span>
+          </button>
+        </li>
+        <!-- Spawn is demoted: the official remote-control server proved unstable
+             in the app. tmux management (Projects) is the primary path. Kept last
+             and labelled experimental. -->
+        <li class="nav-item">
+          <button class="nav-link" data-view="spawn">
+            <i class="bi bi-broadcast-pin"></i> <span class="d-none d-sm-inline" data-i18n="nav.spawn">Spawn</span><sup class="text-warning small">β</sup>
+          </button>
+        </li>
+      </ul>
+      <button class="btn btn-outline-secondary flex-none" id="openSettings" type="button"
+              data-i18n-attr="title:settings.open_title" title="Settings"><i class="bi bi-gear"></i></button>
+    </div>
 
     <!-- ===== projects view ===== -->
     <div data-view="projects">
@@ -73,8 +77,8 @@
       <div class="card-body d-flex align-items-center gap-3">
         <div id="qr" class="bg-white p-2 rounded flex-none" style="line-height:0;"></div>
         <div style="min-width:0;">
-          <div class="fw-semibold"><i class="bi bi-phone"></i> スマホで開く</div>
-          <div class="small text-secondary">この QR をスマホのカメラで読むと、トークン付きで開きます。</div>
+          <div class="fw-semibold"><i class="bi bi-phone"></i> <span data-i18n="qr.open_phone">Open on your phone</span></div>
+          <div class="small text-secondary" data-i18n="qr.hint">Scan this QR with your phone's camera to open it with the token.</div>
           <code id="qrUrl" class="small text-break d-block mt-1"></code>
         </div>
       </div>
@@ -83,39 +87,39 @@
     <!-- launch -->
     <div class="card mb-3" id="launchCard">
       <div class="card-header d-flex align-items-center gap-2">
-        <i class="bi bi-rocket-takeoff text-success"></i><strong>Claude Code 起動</strong>
+        <i class="bi bi-rocket-takeoff text-success"></i><strong data-i18n="launch.header">Launch Claude Code</strong>
       </div>
       <div class="card-body py-2 pe-2 ps-2">
         <div class="input-group mb-1">
           <span class="input-group-text"><i class="bi bi-folder"></i></span>
-          <input id="dir" class="form-control font-monospace" placeholder="起動するフォルダ  例) /path/to/project">
+          <input id="dir" class="form-control font-monospace" data-i18n-attr="placeholder:launch.dir_placeholder" placeholder="Folder to launch in  e.g. /path/to/project">
           <button class="btn btn-outline-secondary" id="openBrowser" type="button">
-            <i class="bi bi-folder2-open"></i> 参照
+            <i class="bi bi-folder2-open"></i> <span data-i18n="launch.browse">Browse</span>
           </button>
         </div>
         <div class="small font-monospace text-info mb-1 text-break d-none" id="namePrefix"></div>
         <div class="input-group mb-2">
           <span class="input-group-text"><i class="bi bi-tag"></i></span>
-          <input id="name" class="form-control" placeholder="セッション名（フォルダ名_この名前 で RC に表示）" autocomplete="off">
+          <input id="name" class="form-control" data-i18n-attr="placeholder:launch.name_placeholder" placeholder="Session name (shown in RC as folder_thisName)" autocomplete="off">
         </div>
-        <button class="btn btn-success w-100" id="launch"><i class="bi bi-play-fill"></i> 起動</button>
+        <button class="btn btn-success w-100" id="launch"><i class="bi bi-play-fill"></i> <span data-i18n="launch.btn">Launch</span></button>
       </div>
     </div>
 
     <!-- sessions -->
     <div class="card mb-3">
       <div class="card-header d-flex align-items-center justify-content-between pe-2">
-        <span><i class="bi bi-terminal"></i> <strong>プロジェクト</strong></span>
+        <span><i class="bi bi-terminal"></i> <strong data-i18n="sessions.header">Projects</strong></span>
         <span class="d-flex gap-2">
           <button class="btn btn-sm btn-outline-warning d-none" id="adoptAll"
-                  title="ターミナルで動いている claude を全部 tmux 管理下へ移管">
-            <i class="bi bi-box-arrow-in-down"></i> 全部tmuxへ<span id="adoptCount"></span>
+                  data-i18n-attr="title:sessions.adopt_title" title="Move every terminal-launched claude under tmux management">
+            <i class="bi bi-box-arrow-in-down"></i> <span data-i18n="sessions.adopt_all">All to tmux</span><span id="adoptCount"></span>
           </button>
           <button class="btn btn-sm btn-outline-secondary" id="refresh"><i class="bi bi-arrow-clockwise"></i></button>
         </span>
       </div>
       <ul id="sessions" class="list-group list-group-flush">
-        <li class="list-group-item text-secondary small">読み込み中…</li>
+        <li class="list-group-item text-secondary small" data-i18n="loading">Loading…</li>
       </ul>
     </div>
 
@@ -125,33 +129,32 @@
     <div data-view="spawn" class="d-none">
       <div class="alert alert-warning py-2 small mb-3" role="alert">
         <i class="bi bi-exclamation-triangle"></i>
-        <strong>実験的(β)。</strong>公式アプリ側の挙動が不安定なため非推奨です。
-        ターミナルの claude は「プロジェクト」タブの<strong>「全部tmuxへ」</strong>で
-        tmux 管理下に取り込むのが安定した方法です。
+        <strong data-i18n="spawn.warn_tag">Experimental (β).</strong>
+        <span data-i18n="spawn.warn_body">Discouraged because the official app side is unstable. The stable way to bring a terminal claude under tmux is "All to tmux" on the Projects tab.</span>
       </div>
       <div class="card mb-3" id="spawnLaunchCard">
         <div class="card-header d-flex align-items-center gap-2">
-          <i class="bi bi-broadcast-pin text-success"></i><strong>Spawnサーバー起動</strong>
+          <i class="bi bi-broadcast-pin text-success"></i><strong data-i18n="spawn.launch_header">Start Spawn server</strong>
         </div>
         <div class="card-body py-2 pe-2 ps-2">
-          <div class="small text-secondary mb-2">公式アプリの「新規セッション」先になる常駐サーバーを tmux で起動します。セッションの作成・管理はアプリ側のプルダウンから(デフォルトの GitHub をこのサーバーに切り替え)。</div>
+          <div class="small text-secondary mb-2" data-i18n="spawn.desc">Starts, under tmux, the resident server the official app's "new session" lands on. Create and manage sessions from the app's pulldown (switch the default GitHub to this server).</div>
           <div class="input-group mb-2">
             <span class="input-group-text"><i class="bi bi-folder"></i></span>
-            <input id="spawnDir" class="form-control font-monospace" placeholder="サーバーを立てるフォルダ">
+            <input id="spawnDir" class="form-control font-monospace" data-i18n-attr="placeholder:spawn.dir_placeholder" placeholder="Folder to host the server">
             <button class="btn btn-outline-secondary" id="spawnBrowse" type="button">
-              <i class="bi bi-folder2-open"></i> 参照
+              <i class="bi bi-folder2-open"></i> <span data-i18n="spawn.browse">Browse</span>
             </button>
           </div>
-          <button class="btn btn-success w-100" id="spawnLaunch"><i class="bi bi-play-fill"></i> サーバー起動</button>
+          <button class="btn btn-success w-100" id="spawnLaunch"><i class="bi bi-play-fill"></i> <span data-i18n="spawn.launch_btn">Start server</span></button>
         </div>
       </div>
       <div class="card mb-3">
         <div class="card-header d-flex align-items-center justify-content-between pe-2">
-          <span><i class="bi bi-broadcast-pin"></i> <strong>稼働中サーバー</strong></span>
+          <span><i class="bi bi-broadcast-pin"></i> <strong data-i18n="spawn.running_header">Running servers</strong></span>
           <button class="btn btn-sm btn-outline-secondary" id="spawnRefresh"><i class="bi bi-arrow-clockwise"></i></button>
         </div>
         <ul id="spawnList" class="list-group list-group-flush">
-          <li class="list-group-item text-secondary small">読み込み中…</li>
+          <li class="list-group-item text-secondary small" data-i18n="loading">Loading…</li>
         </ul>
       </div>
     </div>
@@ -160,19 +163,19 @@
     <div data-view="search" class="d-none">
       <div class="card mb-3">
         <div class="card-header d-flex align-items-center gap-2">
-          <i class="bi bi-search"></i> <strong>セッション検索</strong>
+          <i class="bi bi-search"></i> <strong data-i18n="search.header">Search sessions</strong>
         </div>
         <div class="card-body">
           <select id="searchProject" class="form-select form-select-sm mb-2">
-            <option value="">すべてのプロジェクト</option>
+            <option value="" data-i18n="search.all_projects">All projects</option>
           </select>
           <form id="searchForm" class="input-group">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
             <input id="searchInput" type="search" class="form-control"
-                   placeholder="入力した内容・タイトルで検索" autocomplete="off" enterkeyhint="search">
-            <button class="btn btn-success" type="submit">検索</button>
+                   data-i18n-attr="placeholder:search.placeholder" placeholder="Search by your input / title" autocomplete="off" enterkeyhint="search">
+            <button class="btn btn-success" type="submit" data-i18n="search.btn">Search</button>
           </form>
-          <div class="form-text small">あなたが入力したメッセージとセッション名のみを検索します</div>
+          <div class="form-text small" data-i18n="search.help">Searches only the messages you typed and session names</div>
         </div>
       </div>
       <ul id="searchResults" class="list-group"></ul>
@@ -182,11 +185,11 @@
     <div data-view="archive" class="d-none">
       <div class="card mb-3">
         <div class="card-header d-flex align-items-center gap-2">
-          <i class="bi bi-archive"></i> <strong>アーカイブ</strong>
-          <span class="small text-secondary ms-auto">スワイプ or 「戻す」で一覧へ復元</span>
+          <i class="bi bi-archive"></i> <strong data-i18n="archive.header">Archive</strong>
+          <span class="small text-secondary ms-auto" data-i18n="archive.restore_hint">Swipe or "Restore" to bring back to the list</span>
         </div>
         <ul id="archiveList" class="list-group list-group-flush">
-          <li class="list-group-item text-secondary small">読み込み中…</li>
+          <li class="list-group-item text-secondary small" data-i18n="loading">Loading…</li>
         </ul>
       </div>
     </div>
@@ -196,18 +199,35 @@
   <!-- folder browser (offcanvas) -->
   <div class="offcanvas offcanvas-bottom" tabindex="-1" id="browser" style="height: 80vh;">
     <div class="offcanvas-header border-bottom">
-      <h5 class="offcanvas-title"><i class="bi bi-folder2-open"></i> フォルダを参照</h5>
+      <h5 class="offcanvas-title"><i class="bi bi-folder2-open"></i> <span data-i18n="browser.title">Browse folders</span></h5>
       <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
     <div class="offcanvas-body d-flex flex-column p-0">
       <div class="px-3 py-2 border-bottom small text-secondary font-monospace text-break" id="bcPath">/</div>
       <div class="px-3 py-2 border-bottom d-flex gap-2">
-        <button class="btn btn-sm btn-outline-secondary" id="browseUp"><i class="bi bi-arrow-90deg-up"></i> 上へ</button>
-        <button class="btn btn-sm btn-outline-primary" id="newFolder"><i class="bi bi-folder-plus"></i> 新規フォルダ</button>
+        <button class="btn btn-sm btn-outline-secondary" id="browseUp"><i class="bi bi-arrow-90deg-up"></i> <span data-i18n="browser.up">Up</span></button>
+        <button class="btn btn-sm btn-outline-primary" id="newFolder"><i class="bi bi-folder-plus"></i> <span data-i18n="browser.newfolder">New folder</span></button>
       </div>
       <ul id="browseList" class="list-group list-group-flush overflow-auto flex-grow-1"></ul>
       <div class="p-3 border-top">
-        <button class="btn btn-success w-100" id="selectHere"><i class="bi bi-check-lg"></i> ここを起動先にする</button>
+        <button class="btn btn-success w-100" id="selectHere"><i class="bi bi-check-lg"></i> <span data-i18n="browser.select_here">Launch here</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- settings (offcanvas) -->
+  <div class="offcanvas offcanvas-bottom" tabindex="-1" id="settings" style="height: auto;">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title"><i class="bi bi-gear"></i> <span data-i18n="settings.title">Settings</span></h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+      <label class="form-label small text-secondary" data-i18n="settings.language">Language</label>
+      <div class="btn-group w-100" role="group" id="langGroup">
+        <input type="radio" class="btn-check" name="ccwaLang" id="langEn" value="en" autocomplete="off">
+        <label class="btn btn-outline-primary" for="langEn">English</label>
+        <input type="radio" class="btn-check" name="ccwaLang" id="langJa" value="ja" autocomplete="off">
+        <label class="btn btn-outline-primary" for="langJa">日本語</label>
       </div>
     </div>
   </div>
@@ -216,6 +236,7 @@
 
 <script src="/vendor/bootstrap.bundle.min.js"></script>
 <script src="/vendor/qrcode.js"></script>
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

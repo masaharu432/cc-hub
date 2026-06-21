@@ -72,6 +72,11 @@ body {
 }
 @keyframes sess-spin { to { transform: rotate(360deg); } }
 
+/* Generic in-progress state for a swipe-revealed action button (e.g. アーカイブ):
+   dim it, block re-taps, and spin its icon while the request is in flight. */
+.btn.is-busy { pointer-events: none; opacity: .8; }
+.btn.is-busy .bi { animation: sess-spin .8s linear infinite; }
+
 /* 起動 (launch) button lifecycle (set by setLaunchBtn): mirror the restart-row
    states so creating a new session shows in-progress → done feedback.
    busy = amber + spinning icon (disabled); done = bright green flash;
@@ -106,6 +111,30 @@ body {
   color: #fff;
   background: var(--bs-success);
   border-color: var(--bs-success);
+}
+/* Resume feedback states (set by setRestartBtn, same lifecycle as the restart
+   button): busy = amber + spinning icon while Claude boots (not clickable);
+   done = green flash; err = red flash. Without this the tap looked dead while
+   /api/resume ran for a couple seconds. */
+.sess-resume.busy {
+  color: var(--bs-warning);
+  background: transparent;
+  border-color: var(--bs-warning);
+  box-shadow: 0 0 6px rgba(var(--bs-warning-rgb), .6);
+  pointer-events: none;
+}
+.sess-resume.busy .bi { animation: sess-spin .8s linear infinite; }
+.sess-resume.done {
+  color: #fff;
+  background: var(--bs-success);
+  border-color: var(--bs-success);
+  box-shadow: 0 0 12px rgba(var(--bs-success-rgb), .9);
+}
+.sess-resume.err {
+  color: #fff;
+  background: var(--bs-danger);
+  border-color: var(--bs-danger);
+  box-shadow: none;
 }
 
 /* clickable folder rows in the browser */

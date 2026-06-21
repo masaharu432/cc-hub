@@ -235,7 +235,7 @@ def launch_session(name: str, directory: str) -> dict:
     """Idempotent attach-or-create. Never double-launch the same name."""
     if not NAME_RE.match(name):
         raise ValueError(
-            "Invalid session name. Letters (incl. 日本語), digits, '_', '-' and "
+            "Invalid session name. Letters (incl. Japanese), digits, '_', '-' and "
             "spaces are allowed; no leading space/'-', and no '.' or ':'."
         )
     dpath = Path(directory).expanduser().resolve()
@@ -350,7 +350,7 @@ def rename_session(old: str, new: str) -> dict:
     """
     if not NAME_RE.match(new):
         raise ValueError(
-            "Invalid new name. Letters (incl. 日本語), digits, '_', '-' and spaces "
+            "Invalid new name. Letters (incl. Japanese), digits, '_', '-' and spaces "
             "are allowed; no leading space/'-', and no '.' or ':'."
         )
     target = next((s for s in list_sessions() if s["name"] == old), None)
@@ -380,14 +380,14 @@ def rename_conversation(sid: str, new: str) -> dict:
     never reach the connected app)."""
     if not NAME_RE.match(new):
         raise ValueError(
-            "Invalid new name. Letters (incl. 日本語), digits, '_', '-' and spaces "
+            "Invalid new name. Letters (incl. Japanese), digits, '_', '-' and spaces "
             "are allowed; no leading space/'-', and no '.' or ':'."
         )
     if any(s.get("id") == sid for s in list_sessions()):
-        raise ValueError("稼働中のセッションです。稼働中のまま改名してください。")
+        raise ValueError("This session is running. Rename it live instead.")
     p = _find_conversation_log(sid)
     if not p:
-        raise ValueError("会話ログが見つかりません。")
+        raise ValueError("Conversation log not found.")
     rec = {"type": "custom-title", "customTitle": new, "sessionId": sid}
     with p.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -708,7 +708,7 @@ def _terminate_pid(pid: int, timeout: float = 10.0) -> None:
             return
         time.sleep(0.3)
     raise RuntimeError(
-        "ターミナル側のプロセスが終了しませんでした。手動で終了してから再開してください。"
+        "The terminal process did not exit. Terminate it manually, then resume."
     )
 
 
@@ -821,14 +821,14 @@ def migrate_session(pid: int, sid: str = "", name: str = "") -> dict:
     if sid and not UUID_RE.match(sid):
         raise ValueError("Invalid session id.")
     if dict(_ps_claude_lines()).get(pid) is None:
-        raise ValueError("対象プロセスが見つからないか、claude ではありません。")
+        raise ValueError("Target process not found, or it is not claude.")
     if _pid_in_tmux(pid):
-        raise ValueError("このプロセスは既に tmux 内で動いています。")
+        raise ValueError("This process is already running inside tmux.")
     if not reptyr_available():
         raise ValueError(
-            "reptyr が使えません(未インストール、または cap_sys_ptrace 未付与)。"
-            "ホストで一度だけ `sudo apt-get install reptyr && "
-            "sudo setcap cap_sys_ptrace+ep /usr/bin/reptyr` を実行してください。"
+            "reptyr is unavailable (not installed, or cap_sys_ptrace not granted). "
+            "Run once on the host: `sudo apt-get install reptyr && "
+            "sudo setcap cap_sys_ptrace+ep /usr/bin/reptyr`."
         )
 
     cwd = _pid_cwd(pid)
@@ -869,8 +869,8 @@ def migrate_session(pid: int, sid: str = "", name: str = "") -> dict:
             _tmux("kill-session", "-t", f"={name}")
         reason = _drain_reptyr_err(err_path)
         msg = (
-            "移管に失敗しました。ターミナル側のプロセスは、生きていれば元の"
-            "ターミナルにそのまま残っています。"
+            "Migration failed. The terminal process, if still alive, remains in "
+            "its original terminal untouched."
         )
         if reason:
             # reptyr printed a reason, e.g. permission / sshd-child / bad tty.
@@ -880,10 +880,10 @@ def migrate_session(pid: int, sid: str = "", name: str = "") -> dict:
             # the VSCode Remote-SSH / ptyHost master case: -T can't steal it.
             # kill+resume (a sid-known session) is the reliable fallback.
             msg += (
-                "\nreptyr が接続後に画面を中継できませんでした"
-                "(VSCode Remote-SSH / ptyHost のターミナルでよく起きます)。"
-                "会話を保持したまま tmux へ入れるには「再開(kill+resume)」を"
-                "お使いください(生成途中の表示のみ失われます)。"
+                "\nreptyr attached but could not relay the screen "
+                "(common with VSCode Remote-SSH / ptyHost terminals). "
+                "To bring it into tmux while keeping the conversation, use "
+                "\"Resume (kill+resume)\" (only the in-progress display is lost)."
             )
         raise RuntimeError(msg)
     _drain_reptyr_err(err_path)  # success: reptyr is resident, nothing to report
@@ -913,7 +913,7 @@ def migrate_all_terminal_claudes() -> dict:
     for sid, pid in external_claude_sessions().items():
         cwd = _pid_cwd(pid)
         if not cwd:
-            failed.append({"pid": pid, "error": "作業ディレクトリを取得できません。"})
+            failed.append({"pid": pid, "error": "Could not determine the working directory."})
             continue
         try:
             rr = resume_session(cwd, sid, "", takeover=True, force=True)
@@ -1220,9 +1220,9 @@ def archive_conversation(sid: str) -> None:
     if not UUID_RE.match(sid or ""):
         raise ValueError("Invalid session id.")
     if any(s.get("id") == sid for s in list_sessions()):
-        raise ValueError("稼働中のセッションはアーカイブできません。先に終了してください。")
+        raise ValueError("Can't archive a running session. Stop it first.")
     if sid in external_claude_sessions():
-        raise ValueError("ターミナルで稼働中のセッションはアーカイブできません。")
+        raise ValueError("Can't archive a session that's running in a terminal.")
     with _ARCHIVE_LOCK:
         ids = _read_archive_file()
         if sid not in ids:
@@ -1281,7 +1281,7 @@ def build_overview() -> list[dict]:
         if key not in projects:
             projects[key] = {
                 "path": key,
-                "name": Path(key).name if key else "(フォルダ不明)",
+                "name": Path(key).name if key else "(folder unknown)",
                 "sessions": [],
                 "external": [],
                 "resumable": [],
@@ -1360,7 +1360,7 @@ def resume_session(
     if ext_pid:
         if not takeover:
             raise ValueError(
-                "この会話はターミナルで稼働中です。「tmuxへ移管」から実行してください。"
+                "This conversation is running in a terminal. Use \"Move to tmux\" instead."
             )
         _terminate_pid(ext_pid)
     elif not force and not takeover:
@@ -1369,10 +1369,10 @@ def resume_session(
         flagless = _flagless_claude_in_cwd(str(dpath))
         if flagless:
             raise MaybeLiveError(
-                "このフォルダでターミナル起動の Claude が稼働中です (pid %d)。"
-                "この会話のセッションかもしれません。再開すると同じ会話が二重に"
-                "動く可能性があります(再開してもターミナル側は終了されません。"
-                "移管したい場合は一覧の「tmuxへ移管」を使ってください)。" % flagless
+                "A terminal-launched Claude is running in this folder (pid %d). "
+                "It may be this conversation's session. Resuming could run the same "
+                "conversation twice (resuming does NOT terminate the terminal side). "
+                "To bring it under management, use \"Move to tmux\" in the list." % flagless
             )
 
     requested = name if name and NAME_RE.match(name) else ""
@@ -1562,7 +1562,7 @@ class Handler(BaseHTTPRequestHandler):
                         r["archived"] = r["id"] in archived_ids
                         r["external"] = r["id"] in ext_map
                         r["project"] = (
-                            Path(_norm_path(r["cwd"])).name if r["cwd"] else "(フォルダ不明)"
+                            Path(_norm_path(r["cwd"])).name if r["cwd"] else "(folder unknown)"
                         )
                     return self._send_json({"results": results, "query": q})
             except ValueError as e:
