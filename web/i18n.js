@@ -79,6 +79,9 @@
       "rename.done": "Renamed: {name}",
       "rename.prompt_fixed2": "New name (\"{fixed}\" is fixed)",
       "rename.prompt2": "New name",
+      "rename.updating": "Updating…",
+      "rename.updated": "Done",
+      "rename.failed": "Failed",
       // resume
       "resume.done": "Resumed: {name}",
       "resume.already": "Already running: {name}",
@@ -204,6 +207,9 @@
       "rename.done": "改名しました: {name}",
       "rename.prompt_fixed2": "新しい名前（「{fixed}」は固定）",
       "rename.prompt2": "新しい名前",
+      "rename.updating": "更新中…",
+      "rename.updated": "完了",
+      "rename.failed": "失敗",
       // resume
       "resume.done": "再開しました: {name}",
       "resume.already": "既に起動中: {name}",

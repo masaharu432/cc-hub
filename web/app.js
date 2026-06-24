@@ -421,7 +421,40 @@ async function refresh({ silent = false } = {}) {
   }
 }
 
-async function renameSession(old, dir) {
+// 改名 swipe button feedback (mirrors setRestartBtn). The rename used to fire
+// silently and the name only popped in on a later background poll, so there was
+// no sign it worked and the change looked abrupt. These states show the update
+// in place: busy spinner while the request runs, then a held done/err flash
+// before the row re-renders. Restoring isn't needed — refresh() rebuilds the row
+// fresh shortly after done/err.
+function setRenameBtn(btn, state) {
+  if (!btn) return;
+  btn.classList.remove("busy", "done", "err");
+  if (state === "busy") {
+    btn.classList.add("busy");
+    btn.disabled = true;
+    btn.innerHTML = `<i class="bi bi-arrow-clockwise"></i>${t("rename.updating")}`;
+  } else if (state === "done") {
+    btn.classList.add("done");
+    btn.innerHTML = `<i class="bi bi-check-lg"></i>${t("rename.updated")}`;
+  } else if (state === "err") {
+    btn.classList.add("err");
+    btn.innerHTML = `<i class="bi bi-exclamation-lg"></i>${t("rename.failed")}`;
+  }
+}
+
+// Hold the done/err flash on the swipe button for a beat so the status is
+// readable, THEN clear the open-row guard and re-render. Without the guard reset
+// renderOverview() would skip the rebuild (the row is still swiped open) and the
+// new name would only appear on a later poll — the abrupt change we're fixing.
+function finishRename(reload) {
+  setTimeout(() => {
+    openFront = null;
+    reload();
+  }, 650);
+}
+
+async function renameSession(old, dir, btn) {
   // Only the suffix is editable: the `<folder>_` prefix is fixed at launch and
   // must stay aligned with the project group (same rule as the launch form).
   const prefix = projPrefix(dir);
@@ -436,20 +469,25 @@ async function renameSession(old, dir) {
   const suffix = next.trim();
   if (!suffix || suffix === oldSuffix) return;
   const full = fixed + suffix;
+  setRenameBtn(btn, "busy");
   try {
     const r = await api("/api/rename", { method: "POST", body: JSON.stringify({ old, new: full }) });
+    setRenameBtn(btn, "done");
     show(t("rename.done", { name: r.name }));
-    refresh();
+    finishRename(refresh);
   } catch (e) {
+    setRenameBtn(btn, "err");
     show(e.message, "danger");
+    finishRename(refresh);
   }
 }
 
 // Rename a STOPPED conversation (no live session). The server appends a new
 // custom-title to the log, so the resume/archive list picks it up on refresh.
 // Same `<folder>_` prefix rule as live rename: only the suffix is editable.
-async function renameResumable(id, dir, currentTitle) {
-  openFront = null; // acting on the open row; let the follow-up re-render through
+async function renameResumable(id, dir, currentTitle, btn) {
+  // Keep the open-row guard set until finishRename() so a background poll can't
+  // wipe the busy/done button mid-update; finishRename clears it before reload.
   const prefix = projPrefix(dir);
   const title = currentTitle || "";
   const fixed = prefix && title.startsWith(prefix + "_") ? prefix + "_" : "";
@@ -463,16 +501,20 @@ async function renameResumable(id, dir, currentTitle) {
   if (!suffix) return;
   const full = fixed + suffix;
   if (full === title) return;
+  const reload = currentView === "archive" ? loadArchive : refresh;
+  setRenameBtn(btn, "busy");
   try {
     const r = await api("/api/rename-conversation", {
       method: "POST",
       body: JSON.stringify({ id, new: full }),
     });
+    setRenameBtn(btn, "done");
     show(t("rename.done", { name: r.name }));
-    if (currentView === "archive") loadArchive();
-    else refresh();
+    finishRename(reload);
   } catch (e) {
+    setRenameBtn(btn, "err");
     show(e.message, "danger");
+    finishRename(reload);
   }
 }
 
@@ -1192,9 +1234,9 @@ $("sessions").addEventListener("click", (e) => {
       // Stopped rows carry data-id (rename via log append); live rows carry the
       // tmux data-name (rename via live /rename).
       if (btn.dataset.id)
-        renameResumable(btn.dataset.id, btn.dataset.dir, btn.dataset.title);
+        renameResumable(btn.dataset.id, btn.dataset.dir, btn.dataset.title, btn);
       else
-        renameSession(btn.dataset.name, btn.closest("li")?.dataset.parent);
+        renameSession(btn.dataset.name, btn.closest("li")?.dataset.parent, btn);
     }
     else if (btn.dataset.act === "restart")
       restartSession(btn.dataset.name, btn.dataset.id, btn.dataset.dir, btn);
@@ -1230,7 +1272,7 @@ $("archiveList").addEventListener("click", (e) => {
   if (!btn) return;
   if (btn.dataset.act === "unarchive") unarchiveConversation(btn.dataset.id);
   else if (btn.dataset.act === "rename")
-    renameResumable(btn.dataset.id, btn.dataset.dir, btn.dataset.title);
+    renameResumable(btn.dataset.id, btn.dataset.dir, btn.dataset.title, btn);
   else if (btn.dataset.act === "resume")
     resumeConversation(btn.dataset.dir, btn.dataset.id, btn.dataset.name);
 });

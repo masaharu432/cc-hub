@@ -77,6 +77,22 @@ body {
 .btn.is-busy { pointer-events: none; opacity: .8; }
 .btn.is-busy .bi { animation: sess-spin .8s linear infinite; }
 
+/* 改名 (swipe rename) button lifecycle (set by setRenameBtn): show update status
+   in place instead of letting the name pop silently. busy = amber + spinning icon
+   while /api/rename runs (not clickable); done = green flash held briefly before
+   the row re-renders; err = red flash. */
+.swipe-action .btn.busy {
+  background: var(--bs-warning); border-color: var(--bs-warning);
+  color: #000; pointer-events: none;
+}
+.swipe-action .btn.busy .bi { animation: sess-spin .8s linear infinite; }
+.swipe-action .btn.done {
+  background: var(--bs-success); border-color: var(--bs-success); color: #fff;
+}
+.swipe-action .btn.err {
+  background: var(--bs-danger); border-color: var(--bs-danger); color: #fff;
+}
+
 /* 起動 (launch) button lifecycle (set by setLaunchBtn): mirror the restart-row
    states so creating a new session shows in-progress → done feedback.
    busy = amber + spinning icon (disabled); done = bright green flash;
